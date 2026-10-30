@@ -23,6 +23,9 @@ export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDo
   const fade = useRef(new Animated.Value(1)).current;
   const played = useRef(false);
   const animDone = useRef(false);
+  const finished = useRef(false);
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
 
   // "cover" layout, matching the native splash
   const scale = Math.max(width / ART_W, height / ART_H);
@@ -31,6 +34,8 @@ export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDo
   const r = DOT_R * scale;
 
   const finish = () => {
+    if (finished.current) return;
+    finished.current = true;
     Animated.timing(fade, { toValue: 0, duration: 450, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => onDone());
   };
 
@@ -46,13 +51,25 @@ export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDo
       Animated.delay(150),
     ]).start(() => {
       animDone.current = true;
-      if (ready) finish();
+      if (readyRef.current) finish();
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (ready && animDone.current) finish();
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net: never hold the app behind the splash for more than a few seconds.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (readyRef.current) finish();
+    }, 3500);
+    const t2 = setTimeout(() => finish(), 8000);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(t2);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade, backgroundColor: colors.bg, zIndex: 100 }]} pointerEvents="none" accessibilityLabel="Orbit is loading">

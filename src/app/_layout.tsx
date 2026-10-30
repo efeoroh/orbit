@@ -27,7 +27,7 @@ function handleResponse(res: Notifications.NotificationResponse | null) {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fredoka_500Medium: require('@expo-google-fonts/fredoka/500Medium/Fredoka_500Medium.ttf'),
     Fredoka_600SemiBold: require('@expo-google-fonts/fredoka/600SemiBold/Fredoka_600SemiBold.ttf'),
     Nunito_400Regular: require('@expo-google-fonts/nunito/400Regular/Nunito_400Regular.ttf'),
@@ -36,7 +36,7 @@ export default function RootLayout() {
   });
   const [splashDone, setSplashDone] = useState(false);
   const { loaded } = useOrbit();
-  const ready = fontsLoaded && loaded;
+  const ready = (fontsLoaded || !!fontError) && loaded;
 
   useEffect(() => {
     loadStore();
