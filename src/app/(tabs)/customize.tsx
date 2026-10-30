@@ -202,6 +202,26 @@ export default function Customize() {
         </Pressable>
       </Section>
 
+      <Section title="Setup">
+        <T size={13} color={colors.muted}>
+          Go through the welcome questions again. Your answers start filled in, and your history is kept.
+        </T>
+        <Pressable
+          onPress={() =>
+            Alert.alert('Redo setup?', 'You’ll go through the welcome questions again. Your check-in history stays.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Redo setup', onPress: () => set({ onboarded: false }) },
+            ])
+          }
+          accessibilityRole="button"
+          style={{ minHeight: 46, justifyContent: 'center' }}
+        >
+          <T w="semibold" size={15}>
+            Redo setup
+          </T>
+        </Pressable>
+      </Section>
+
       <T size={12} color={colors.muted} style={{ textAlign: 'center', marginTop: 24 }}>
         Orbit {Constants.expoConfig?.version ?? ''}
       </T>
