@@ -6,12 +6,13 @@ import { LocationPicker } from '../components/LocationPicker';
 import { Rings } from '../components/Rings';
 import { TimeField } from '../components/TimeField';
 import { Button, Field, Grain, Segmented, T, Title } from '../components/ui';
-import { CALC_METHODS, Settings } from '../lib/habits';
+import { CALC_METHODS, MAX_WORKOUTS, Settings } from '../lib/habits';
+import { ListEditor, cleanList } from '../components/ListEditor';
 import { requestPermission } from '../lib/notifications';
 import { getState, updateSettings } from '../lib/store';
 import { colors } from '../lib/theme';
 
-const STEPS = ['welcome', 'name', 'location', 'prayer', 'mind', 'body', 'reminders'] as const;
+const STEPS = ['welcome', 'name', 'location', 'prayer', 'mind', 'meds', 'workouts', 'body', 'reminders'] as const;
 
 function num(v: string, fallback: number) {
   const n = parseFloat(v.replace(',', '.'));
@@ -29,7 +30,7 @@ export default function Onboarding() {
 
   async function finish() {
     await requestPermission();
-    updateSettings({ ...d, onboarded: true });
+    updateSettings({ ...d, meds: cleanList(d.meds), workouts: cleanList(d.workouts), onboarded: true });
     router.replace('/');
   }
 
@@ -69,7 +70,8 @@ export default function Onboarding() {
                   size={220}
                   stroke={19}
                 />
-                <Title>Orbit</Title>
+                <T w="display" size={44}>Orbit</T>
+                <T w="medium" size={16} color={colors.ink2} style={{ letterSpacing: 2 }}>body.mind.soul.</T>
                 <T size={16} color={colors.ink2} style={{ textAlign: 'center', maxWidth: 300 }}>
                   Three daily rings for body, mind and soul. Close them by showing up.
                 </T>
@@ -147,10 +149,42 @@ export default function Onboarding() {
               </>
             )}
 
+            {step === 'meds' && (
+              <>
+                <Title>Medication & vitamins</Title>
+                <T size={15} color={colors.ink2}>
+                  Add each one you take daily. Each gets its own check-in. Skip if none.
+                </T>
+                <ListEditor
+                  items={d.meds}
+                  onChange={(meds) => set({ meds })}
+                  namePlaceholder="e.g. Finasteride"
+                  detailPlaceholder="Dose or note (optional)"
+                  addLabel={d.meds.length ? 'Add another' : 'Add one'}
+                />
+              </>
+            )}
+
+            {step === 'workouts' && (
+              <>
+                <Title>Daily workouts</Title>
+                <T size={15} color={colors.ink2}>
+                  Pick up to {MAX_WORKOUTS}. Each one is its own check-in.
+                </T>
+                <ListEditor
+                  items={d.workouts}
+                  onChange={(workouts) => set({ workouts })}
+                  namePlaceholder="e.g. Push-ups"
+                  detailPlaceholder="Target, e.g. 20 reps"
+                  addLabel="Add a workout"
+                  max={MAX_WORKOUTS}
+                />
+              </>
+            )}
+
             {step === 'body' && (
               <>
-                <Title>Body</Title>
-                <Field label="What to call your daily meds" value={d.medsLabel} onChangeText={(medsLabel) => set({ medsLabel })} placeholder="Vitamins / Medication" />
+                <Title>Water & salt</Title>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <Field label="Water goal (L)" keyboardType="decimal-pad" defaultValue={String(d.waterGoal)} onChangeText={(v) => set({ waterGoal: num(v, d.waterGoal) || 3 })} />
@@ -159,16 +193,8 @@ export default function Onboarding() {
                     <Field label="Salt per dish" value={d.saltLimit} onChangeText={(saltLimit) => set({ saltLimit })} />
                   </View>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field label="Push-ups" keyboardType="number-pad" defaultValue={String(d.pushups)} onChangeText={(v) => set({ pushups: Math.round(num(v, d.pushups)) })} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field label="Plank (sec)" keyboardType="number-pad" defaultValue={String(d.plankSec)} onChangeText={(v) => set({ plankSec: Math.round(num(v, d.plankSec)) })} />
-                  </View>
-                </View>
                 <T size={13} color={colors.muted}>
-                  A common guideline for adult men is about 3 L of water a day from drinks, and about 2.2 L for women. Adjust to suit you.
+                  A common guideline is about 3 L of water a day from drinks for adult men, and about 2.2 L for women. Water is logged in glasses of {d.glass} L.
                 </T>
               </>
             )}

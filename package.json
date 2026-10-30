@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/fredoka": "^0.4.1",
+    "@expo-google-fonts/nunito": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.2.1",
     "adhan": "^4.4.6",
     "expo": "~58.0.21",
+    "expo-audio": "~58.0.10",
     "expo-constants": "~58.0.14",
     "expo-font": "~58.0.11",
     "expo-haptics": "~58.0.7",
@@ -19,11 +21,11 @@
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.7",
     "react": "19.3.0",
+    "react-dom": "19.3.0",
     "react-native": "0.88.1",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
-    "react-native-svg": "15.16.0",
-    "react-dom": "19.3.0"
+    "react-native-svg": "15.16.0"
   },
   "devDependencies": {
     "@types/react": "~19.3.0",

@@ -3,8 +3,10 @@ import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { AppState } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, View } from 'react-native';
+import { LoadingSplash } from '../components/LoadingSplash';
+import { initFeedback } from '../lib/feedback';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PRAYERS, PrayerId } from '../lib/habits';
 import { PRAYED_ACTION, rescheduleAll, setupCategories } from '../lib/notifications';
@@ -26,22 +28,24 @@ function handleResponse(res: Notifications.NotificationResponse | null) {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Inter_400Regular: require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
-    Inter_500Medium: require('@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'),
-    Inter_600SemiBold: require('@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'),
-    Inter_700Bold: require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
+    Fredoka_500Medium: require('@expo-google-fonts/fredoka/500Medium/Fredoka_500Medium.ttf'),
+    Fredoka_600SemiBold: require('@expo-google-fonts/fredoka/600SemiBold/Fredoka_600SemiBold.ttf'),
+    Nunito_400Regular: require('@expo-google-fonts/nunito/400Regular/Nunito_400Regular.ttf'),
+    Nunito_600SemiBold: require('@expo-google-fonts/nunito/600SemiBold/Nunito_600SemiBold.ttf'),
+    Nunito_700Bold: require('@expo-google-fonts/nunito/700Bold/Nunito_700Bold.ttf'),
   });
+  const [splashDone, setSplashDone] = useState(false);
   const { loaded } = useOrbit();
   const ready = fontsLoaded && loaded;
 
   useEffect(() => {
     loadStore();
     setupCategories();
+    initFeedback();
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    SplashScreen.hideAsync().catch(() => {});
 
     rescheduleAll(getState().settings);
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -66,16 +70,21 @@ export default function RootLayout() {
     };
   }, [ready]);
 
-  if (!ready) return null;
-
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="day/[date]" options={{ presentation: 'modal' }} />
-      </Stack>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        {ready ? (
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="day/[date]" options={{ presentation: 'modal' }} />
+          </Stack>
+        ) : null}
+        {!splashDone ? (
+          <LoadingSplash ready={ready} onShown={() => SplashScreen.hideAsync().catch(() => {})} onDone={() => setSplashDone(true)} />
+        ) : null}
+      </View>
     </SafeAreaProvider>
   );
 }

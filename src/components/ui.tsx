@@ -11,11 +11,12 @@ import {
   TextProps,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts } from '../lib/theme';
 
-type Weight = 'regular' | 'medium' | 'semibold' | 'bold';
+type Weight = keyof typeof fonts;
 
 export function T({
   w = 'regular',
@@ -29,23 +30,30 @@ export function T({
 
 export function Title({ children }: { children: ReactNode }) {
   return (
-    <T w="bold" size={30} style={{ letterSpacing: -0.6 }} accessibilityRole="header">
+    <T w="display" size={32} accessibilityRole="header">
       {children}
     </T>
   );
 }
 
-/** Paper grain laid over everything, like the mockups. */
+const TILE = 128;
+const GRAIN = require('../../assets/grain.png');
+
+/** Paper grain laid evenly over the whole screen. */
 export function Grain() {
+  const { width, height } = useWindowDimensions();
+  const cols = Math.ceil(width / TILE);
+  const rows = Math.ceil(height / TILE) + 1;
   return (
-    <Image
-      source={require('../../assets/grain.png')}
-      resizeMode="repeat"
-      style={StyleSheet.absoluteFill}
-      pointerEvents="none"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    />
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', zIndex: 10 }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {Array.from({ length: rows }, (_, r) => (
+        <View key={r} style={{ flexDirection: 'row' }}>
+          {Array.from({ length: cols }, (_, c) => (
+            <Image key={c} source={GRAIN} style={{ width: TILE, height: TILE }} />
+          ))}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -101,7 +109,7 @@ export function Segmented<K extends string>({
             accessibilityState={{ selected: on }}
             style={[styles.segItem, on && styles.segOn]}
           >
-            <T w={on ? 'semibold' : 'regular'} size={13} color={on ? colors.ink : colors.ink2}>
+            <T w={on ? 'semibold' : 'regular'} size={14} color={on ? colors.ink : colors.ink2}>
               {o.label}
             </T>
           </Pressable>

@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
-import { CheckId, DayLog, PrayerId, Settings, defaultSettings, emptyDay } from './habits';
+import { DayLog, Settings, defaultSettings, emptyDay, migrateSettings } from './habits';
 
-const SETTINGS_KEY = 'orbit:settings:v1';
+const SETTINGS_KEY = 'orbit:settings:v1'; // shape is migrated on load
 const DAYS_KEY = 'orbit:days:v1';
 
 export type OrbitState = {
@@ -35,15 +35,9 @@ export async function loadStore(): Promise<void> {
   if (state.loaded) return;
   try {
     const [[, s], [, d]] = await AsyncStorage.multiGet([SETTINGS_KEY, DAYS_KEY]);
-    const saved = s ? (JSON.parse(s) as Partial<Settings>) : {};
     state = {
       loaded: true,
-      settings: {
-        ...defaultSettings,
-        ...saved,
-        enabled: { ...defaultSettings.enabled, ...(saved.enabled ?? {}) },
-        evening: { ...defaultSettings.evening, ...(saved.evening ?? {}) },
-      },
+      settings: s ? migrateSettings(JSON.parse(s)) : defaultSettings,
       days: d ? JSON.parse(d) : {},
     };
   } catch {
@@ -87,7 +81,7 @@ function updateDay(key: string, fn: (d: DayLog) => DayLog) {
 }
 
 /** value `undefined` clears the answer. */
-export function setCheck(key: string, id: CheckId | PrayerId, value: boolean | undefined) {
+export function setCheck(key: string, id: string, value: boolean | undefined) {
   updateDay(key, (d) => {
     const checks = { ...d.checks };
     if (value === undefined) delete checks[id];

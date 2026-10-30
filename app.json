@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#F4F2ED",
+    "backgroundColor": "#F6F3EE",
     "ios": {
       "bundleIdentifier": "com.efeoroh.orbit",
       "supportsTablet": false,
@@ -20,9 +20,11 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 160,
-          "backgroundColor": "#F4F2ED"
+          "image": "./assets/splash.jpg",
+          "backgroundColor": "#F6F3EE",
+          "resizeMode": "cover",
+          "enableFullScreenImage_legacy": true,
+          "imageWidth": 200
         }
       ],
       [

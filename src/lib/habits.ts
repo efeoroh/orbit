@@ -1,8 +1,8 @@
 import type { Group } from './theme';
 
 export type PrayerId = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
-export type CheckId = 'sodium' | 'sugar' | 'pushups' | 'meds' | 'skin' | 'passion' | 'clean';
-export type HabitId = CheckId | PrayerId | 'water';
+/** Fixed habits that can be switched on or off. Medications and workouts are user-made lists. */
+export type FixedId = 'sodium' | 'sugar' | 'skin' | 'water' | 'passion' | 'clean' | PrayerId;
 
 export type CalcMethod =
   | 'NorthAmerica'
@@ -21,8 +21,10 @@ export const CALC_METHODS: { id: CalcMethod; label: string }[] = [
   { id: 'Karachi', label: 'University of Karachi' },
 ];
 
+export type ListItem = { id: string; name: string; detail?: string };
+
 export type Settings = {
-  version: 1;
+  version: 2;
   onboarded: boolean;
   name: string;
   location: { lat: number; lon: number; label: string } | null;
@@ -31,64 +33,25 @@ export type Settings = {
   passionName: string;
   passionPrompt: string;
   quitLabel: string;
-  medsLabel: string;
+  meds: ListItem[];
+  workouts: ListItem[];
   saltLimit: string;
   waterGoal: number;
-  waterStep: number;
-  pushups: number;
-  plankSec: number;
-  enabled: Record<HabitId, boolean>;
+  /** Size of one glass, in litres. */
+  glass: number;
+  enabled: Record<FixedId, boolean>;
   prayerReminders: boolean;
   evening: { enabled: boolean; hour: number; minute: number };
 };
 
 export type DayLog = {
-  checks: Partial<Record<CheckId | PrayerId, boolean>>;
+  /** Keyed by habit id: fixed ids, prayer ids, `med:<id>` or `wo:<id>`. */
+  checks: Record<string, boolean>;
   water: number;
   updatedAt: number;
 };
 
-export const ALL_IDS: HabitId[] = [
-  'sodium', 'sugar', 'pushups', 'meds', 'skin', 'water',
-  'passion', 'clean',
-  'fajr', 'dhuhr', 'asr', 'maghrib', 'isha',
-];
-
-export const defaultSettings: Settings = {
-  version: 1,
-  onboarded: false,
-  name: '',
-  location: null,
-  calcMethod: 'NorthAmerica',
-  madhab: 'shafi',
-  passionName: 'Music',
-  passionPrompt: 'Did you make a track today?',
-  quitLabel: 'No PMO',
-  medsLabel: 'Vitamins / Medication',
-  saltLimit: '¼ tsp',
-  waterGoal: 3,
-  waterStep: 0.5,
-  pushups: 20,
-  plankSec: 60,
-  enabled: Object.fromEntries(ALL_IDS.map((id) => [id, true])) as Record<HabitId, boolean>,
-  prayerReminders: true,
-  evening: { enabled: true, hour: 21, minute: 30 },
-};
-
-export function emptyDay(): DayLog {
-  return { checks: {}, water: 0, updatedAt: 0 };
-}
-
-export type HabitDef = {
-  id: HabitId;
-  group: Group;
-  kind: 'check' | 'water' | 'prayer';
-  /** Confirmed toward the end of the day. */
-  endOfDay?: boolean;
-  label: (s: Settings) => string;
-  sub: (s: Settings) => string;
-};
-
+export const PRAYERS: PrayerId[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 export const PRAYER_NAMES: Record<PrayerId, string> = {
   fajr: 'Fajr',
   dhuhr: 'Dhuhr',
@@ -97,33 +60,132 @@ export const PRAYER_NAMES: Record<PrayerId, string> = {
   isha: 'Isha',
 };
 
-export const PRAYERS: PrayerId[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+const FIXED: FixedId[] = ['sodium', 'sugar', 'skin', 'water', 'passion', 'clean', ...PRAYERS];
 
-export const HABITS: HabitDef[] = [
-  // Body
-  { id: 'meds', group: 'body', kind: 'check', label: (s) => s.medsLabel || 'Vitamins / Medication', sub: () => 'Took them today' },
-  { id: 'skin', group: 'body', kind: 'check', label: () => 'Skincare', sub: () => 'Did your routine' },
-  { id: 'pushups', group: 'body', kind: 'check', label: () => 'Push-ups + plank', sub: (s) => `${s.pushups} push-ups · ${s.plankSec} sec plank` },
-  { id: 'sodium', group: 'body', kind: 'check', endOfDay: true, label: () => 'Low sodium', sub: (s) => `${s.saltLimit} salt per dish, all day` },
-  { id: 'sugar', group: 'body', kind: 'check', endOfDay: true, label: () => 'No sugar', sub: () => 'Zero added sugar today' },
-  { id: 'water', group: 'body', kind: 'water', label: () => 'Water', sub: (s) => `${fmtNum(s.waterGoal)} L goal` },
-  // Mind
-  { id: 'passion', group: 'mind', kind: 'check', label: (s) => s.passionName || 'Passion', sub: (s) => s.passionPrompt || 'Did you do it today?' },
-  { id: 'clean', group: 'mind', kind: 'check', endOfDay: true, label: (s) => s.quitLabel || 'Stayed clean', sub: () => 'Stayed clean today' },
-  // Soul
-  ...PRAYERS.map<HabitDef>((p) => ({ id: p, group: 'soul', kind: 'prayer', label: () => PRAYER_NAMES[p], sub: () => '' })),
-];
+export const MAX_WORKOUTS = 3;
 
-export function habitsIn(group: Group, s: Settings): HabitDef[] {
-  return HABITS.filter((h) => h.group === group && s.enabled[h.id] !== false);
+export function newId(): string {
+  return Math.random().toString(36).slice(2, 9);
 }
 
-/** The yes/no habits the step-by-step check-in walks through, end-of-day ones last. */
-export function checkInSteps(s: Settings): HabitDef[] {
-  const checks = HABITS.filter((h) => h.kind === 'check' && s.enabled[h.id] !== false);
-  return [...checks.filter((h) => !h.endOfDay), ...checks.filter((h) => h.endOfDay)];
+export const defaultSettings: Settings = {
+  version: 2,
+  onboarded: false,
+  name: '',
+  location: null,
+  calcMethod: 'NorthAmerica',
+  madhab: 'shafi',
+  passionName: 'Music',
+  passionPrompt: 'Did you make a track today?',
+  quitLabel: 'No PMO',
+  meds: [],
+  workouts: [
+    { id: 'pushups', name: 'Push-ups', detail: '20 reps' },
+    { id: 'plank', name: 'Plank', detail: '60 seconds' },
+  ],
+  saltLimit: '¼ tsp',
+  waterGoal: 3,
+  glass: 0.5,
+  enabled: Object.fromEntries(FIXED.map((id) => [id, true])) as Record<FixedId, boolean>,
+  prayerReminders: true,
+  evening: { enabled: true, hour: 21, minute: 30 },
+};
+
+export function emptyDay(): DayLog {
+  return { checks: {}, water: 0, updatedAt: 0 };
 }
+
+/** Brings older saved settings up to the current shape. */
+export function migrateSettings(saved: Record<string, any>): Settings {
+  const s: Settings = {
+    ...defaultSettings,
+    ...saved,
+    version: 2,
+    enabled: { ...defaultSettings.enabled, ...(saved.enabled ?? {}) },
+    evening: { ...defaultSettings.evening, ...(saved.evening ?? {}) },
+  } as Settings;
+  if (!Array.isArray(saved.meds)) {
+    const label = String(saved.medsLabel ?? '').trim();
+    s.meds =
+      !label || label === 'Vitamins / Medication'
+        ? []
+        : label
+            .split(/\s*(?:\+|,|&|\band\b)\s*/i)
+            .map((n) => n.trim())
+            .filter(Boolean)
+            .map((n) => ({ id: newId(), name: n[0].toUpperCase() + n.slice(1) }));
+  }
+  if (!Array.isArray(saved.workouts)) {
+    s.workouts = [
+      { id: 'pushups', name: 'Push-ups', detail: `${saved.pushups ?? 20} reps` },
+      { id: 'plank', name: 'Plank', detail: `${saved.plankSec ?? 60} seconds` },
+    ];
+  }
+  if (typeof saved.glass !== 'number') s.glass = typeof saved.waterStep === 'number' ? saved.waterStep : 0.5;
+  for (const k of ['medsLabel', 'pushups', 'plankSec', 'waterStep']) delete (s as any)[k];
+  return s;
+}
+
+export type HabitDef = {
+  id: string;
+  group: Group;
+  kind: 'check' | 'water' | 'prayer';
+  /** Confirmed toward the end of the day. */
+  endOfDay?: boolean;
+  name: string;
+  sub: string;
+  /** The question asked in the check-in. */
+  prompt: string;
+};
 
 export function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+export function glasses(s: Settings): number {
+  return Math.max(1, Math.round(s.waterGoal / (s.glass || 0.5)));
+}
+
+/** Every habit currently being tracked, in ring order. */
+export function allHabits(s: Settings): HabitDef[] {
+  const on = (id: FixedId) => s.enabled[id] !== false;
+  const out: HabitDef[] = [];
+  // Body
+  for (const m of s.meds) {
+    out.push({ id: `med:${m.id}`, group: 'body', kind: 'check', name: m.name, sub: m.detail || 'Daily dose', prompt: m.detail || 'Took it today?' });
+  }
+  if (on('skin')) out.push({ id: 'skin', group: 'body', kind: 'check', name: 'Skincare', sub: 'Your routine', prompt: 'Did your routine?' });
+  for (const w of s.workouts) {
+    out.push({ id: `wo:${w.id}`, group: 'body', kind: 'check', name: w.name, sub: w.detail || 'Done today', prompt: w.detail || 'Did it today?' });
+  }
+  if (on('sodium')) out.push({ id: 'sodium', group: 'body', kind: 'check', endOfDay: true, name: 'Low sodium', sub: `${s.saltLimit} salt per dish`, prompt: `${s.saltLimit} salt per dish, all day` });
+  if (on('sugar')) out.push({ id: 'sugar', group: 'body', kind: 'check', endOfDay: true, name: 'No sugar', sub: 'Zero added sugar', prompt: 'Zero added sugar today' });
+  if (on('water')) out.push({ id: 'water', group: 'body', kind: 'water', endOfDay: true, name: 'Water', sub: `${fmtNum(s.waterGoal)} L`, prompt: `Drank your ${fmtNum(s.waterGoal)} L today?` });
+  // Mind
+  if (on('passion')) out.push({ id: 'passion', group: 'mind', kind: 'check', name: s.passionName || 'Passion', sub: s.passionPrompt, prompt: s.passionPrompt || 'Did you do it today?' });
+  if (on('clean')) out.push({ id: 'clean', group: 'mind', kind: 'check', endOfDay: true, name: s.quitLabel || 'Stayed clean', sub: 'Stayed clean', prompt: 'Stayed clean today' });
+  // Soul
+  for (const p of PRAYERS) if (on(p)) out.push({ id: p, group: 'soul', kind: 'prayer', name: PRAYER_NAMES[p], sub: '', prompt: '' });
+  return out;
+}
+
+export function habitsIn(group: Group, s: Settings): HabitDef[] {
+  return allHabits(s).filter((h) => h.group === group);
+}
+
+/** The one-at-a-time check-in: everything except prayers, end-of-day items last. */
+export function checkInSteps(s: Settings): HabitDef[] {
+  const hs = allHabits(s).filter((h) => h.kind !== 'prayer');
+  const order = (h: HabitDef) => (h.endOfDay ? 1 : 0);
+  const early = hs.filter((h) => order(h) === 0);
+  const late = hs.filter((h) => order(h) === 1 && h.group === 'body');
+  const lateMind = hs.filter((h) => order(h) === 1 && h.group === 'mind');
+  return [...early, ...late, ...lateMind];
+}
+
+/** Whether a habit counts as done on a day. */
+export function isDone(h: HabitDef, day: DayLog | undefined, s: Settings): boolean {
+  if (!day) return false;
+  if (h.kind === 'water') return day.water >= s.waterGoal;
+  return day.checks[h.id] === true;
 }
