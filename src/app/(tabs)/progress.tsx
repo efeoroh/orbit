@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Screen, Segmented, T, Title } from '../../components/ui';
 import { addDays, dateKey, fromKey, mondayIndex, shortDate } from '../../lib/dates';
 import { GROUPS, isLogged, ringStats, ringsClosed } from '../../lib/rings';
+import { tap } from '../../lib/feedback';
 import { useOrbit } from '../../lib/store';
 import { colors, groupColor, groupInk, groupLight, groupName } from '../../lib/theme';
 import { useToday } from '../../lib/useToday';
@@ -71,7 +72,10 @@ export default function Progress() {
             return (
               <Pressable
                 key={key}
-                onPress={() => router.push(`/day/${key}`)}
+                onPress={() => {
+                  tap();
+                  router.push(`/day/${key}`);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`${shortDate(date)}, ${lvl < 0 ? 'not logged' : LEVEL_TEXT[lvl]}`}
                 accessibilityHint="Opens this day to edit"

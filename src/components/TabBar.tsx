@@ -2,6 +2,7 @@ import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { tap } from '../lib/feedback';
 import { colors } from '../lib/theme';
 import { T } from './ui';
 
@@ -76,6 +77,7 @@ export function TabBar({ state, navigateToTab }: BottomTabBarProps) {
               accessibilityState={{ selected: on }}
               accessibilityLabel={TABS[route.name]}
               onPress={() => {
+                tap();
                 if (!on) navigateToTab(route.key);
               }}
               style={{ flex: 1, alignItems: 'center', gap: 4, minHeight: 48, justifyContent: 'center' }}

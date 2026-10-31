@@ -6,6 +6,7 @@ import { formatTime, fromKey, longDate, todayKey } from '../../lib/dates';
 import { PrayerId, glasses, habitsIn } from '../../lib/habits';
 import { prayerTimes } from '../../lib/prayer';
 import { GROUPS, isLogged, ringStats } from '../../lib/rings';
+import { celebrate, play, tap } from '../../lib/feedback';
 import { setCheck, setWater, useOrbit } from '../../lib/store';
 import { colors, groupColor, groupInk, groupName } from '../../lib/theme';
 
@@ -30,7 +31,7 @@ export default function EditDay() {
           <T w="semibold" size={15}>
             Edit day
           </T>
-          <Pressable onPress={() => router.back()} accessibilityRole="button" style={{ minWidth: 60, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}>
+          <Pressable onPress={() => { tap(); router.back(); }} accessibilityRole="button" style={{ minWidth: 60, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}>
             <T w="semibold" size={15}>
               Done
             </T>
@@ -67,10 +68,10 @@ export default function EditDay() {
                         <T size={15} style={{ flex: 1 }}>
                           Water · {count} of {total} glasses
                         </T>
-                        <Pressable onPress={() => setWater(key, (count - 1) * settings.glass)} disabled={count <= 0} accessibilityRole="button" accessibilityLabel="One glass less" style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: count <= 0 ? 0.4 : 1 }}>
+                        <Pressable onPress={() => { tap(); setWater(key, (count - 1) * settings.glass); }} disabled={count <= 0} accessibilityRole="button" accessibilityLabel="One glass less" style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: count <= 0 ? 0.4 : 1 }}>
                           <T size={18}>−</T>
                         </Pressable>
-                        <Pressable onPress={() => setWater(key, Math.min(total, count + 1) * settings.glass)} disabled={count >= total} accessibilityRole="button" accessibilityLabel="One glass more" style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: count >= total ? 0.4 : 1 }}>
+                        <Pressable onPress={() => { play('drop'); setWater(key, Math.min(total, count + 1) * settings.glass); }} disabled={count >= total} accessibilityRole="button" accessibilityLabel="One glass more" style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', opacity: count >= total ? 0.4 : 1 }}>
                           <T size={18}>+</T>
                         </Pressable>
                       </View>
@@ -95,7 +96,11 @@ export default function EditDay() {
                         label={h.name}
                         style={{ width: 150 }}
                         value={value}
-                        onChange={(a) => setCheck(key, h.id, a === value ? undefined : a === 'done')}
+                        onChange={(a) => {
+                          const v2 = a === value ? undefined : a === 'done';
+                          if (v2 === true) celebrate(h.group);
+                          setCheck(key, h.id, v2);
+                        }}
                         options={[
                           { id: 'done', label: 'Done' },
                           { id: 'missed', label: 'Missed' },

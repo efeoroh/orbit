@@ -7,9 +7,9 @@ import { HoldCircle } from '../../components/HoldCircle';
 import { QuickLog } from '../../components/QuickLog';
 import { Button, Screen, Segmented, T } from '../../components/ui';
 import { addDays, dateKey, fromKey } from '../../lib/dates';
-import { celebrate } from '../../lib/feedback';
+import { celebrate, levelUp, tap } from '../../lib/feedback';
 import { checkInSteps, isDone } from '../../lib/habits';
-import { setCheck, setWater, useOrbit } from '../../lib/store';
+import { levelUpIfEarned, setCheck, setWater, useOrbit } from '../../lib/store';
 import { colors, groupColor, groupName, type Group } from '../../lib/theme';
 import { useToday } from '../../lib/useToday';
 
@@ -23,6 +23,17 @@ export default function CheckIn() {
   const steps = checkInSteps(settings);
   const glow = useRef<GlowHandle>(null);
   const enter = useRef(new Animated.Value(1)).current;
+  const [toast, setToast] = useState('');
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const showToast = (msg: string) => {
+    setToast(msg);
+    toastAnim.setValue(0);
+    Animated.sequence([
+      Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true }),
+      Animated.delay(2600),
+      Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+  };
 
   const answered = (i: number) => {
     const h = steps[i];
@@ -55,7 +66,12 @@ export default function CheckIn() {
     if (!cur) return;
     if (cur.kind === 'water') setWater(key, Math.max(settings.waterGoal, day?.water ?? 0));
     else setCheck(key, cur.id, true);
-    onCelebrate(cur.group);
+    const lv = levelUpIfEarned(cur.id, key);
+    if (lv) {
+      levelUp();
+      glow.current?.flash(groupColor[cur.group]);
+      showToast(`Level up! ${lv.name} is now ${lv.target}`);
+    } else onCelebrate(cur.group);
     setTimeout(() => go(step + 1), 420);
   }
 
@@ -73,7 +89,10 @@ export default function CheckIn() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, gap: 14, paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
           <View style={{ flexDirection: 'row', alignItems: 'center', height: 44 }}>
             <Pressable
-              onPress={() => go(Math.max(0, step - 1))}
+              onPress={() => {
+                tap();
+                go(Math.max(0, step - 1));
+              }}
               disabled={step === 0}
               accessibilityRole="button"
               accessibilityLabel="Previous habit"
@@ -164,6 +183,28 @@ export default function CheckIn() {
         </ScrollView>
       </Screen>
       <Glow ref={glow} />
+      {toast ? (
+        <Animated.View
+          pointerEvents="none"
+          accessibilityLiveRegion="assertive"
+          style={{
+            position: 'absolute',
+            top: 64,
+            left: 24,
+            right: 24,
+            zIndex: 30,
+            alignItems: 'center',
+            opacity: toastAnim,
+            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) }],
+          }}
+        >
+          <View style={{ backgroundColor: colors.dark, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 18 }}>
+            <T w="semibold" size={15} color={colors.onDark} style={{ textAlign: 'center' }}>
+              {toast}
+            </T>
+          </View>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }

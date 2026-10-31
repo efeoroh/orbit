@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { play } from '../lib/feedback';
 import { colors } from '../lib/theme';
 
 // The splash artwork is 853 × 1844; the three dots sit at these points in it.
@@ -12,10 +13,11 @@ const DOTS = [
 ];
 const DOT_Y = 1745;
 const DOT_R = 13;
+const BOUNCES = 3;
 
 /**
  * Same artwork as the native splash, so the hand-off is seamless. The three dots
- * hop once, one after another, then the whole screen fades into the app.
+ * dribble three times in a wave, then the opening chime plays and the screen fades into the app.
  */
 export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDone: () => void; onShown: () => void }) {
   const { width, height } = useWindowDimensions();
@@ -36,6 +38,7 @@ export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDo
   const finish = () => {
     if (finished.current) return;
     finished.current = true;
+    play('open');
     Animated.timing(fade, { toValue: 0, duration: 450, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => onDone());
   };
 
@@ -43,12 +46,14 @@ export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDo
     if (played.current) return;
     played.current = true;
     Animated.sequence([
-      Animated.delay(250),
+      Animated.delay(200),
       Animated.stagger(
-        190,
-        hops.map((v) => Animated.timing(v, { toValue: 1, duration: 560, easing: Easing.linear, useNativeDriver: true })),
+        130,
+        hops.map((v) =>
+          Animated.loop(Animated.timing(v, { toValue: 1, duration: 440, easing: Easing.linear, useNativeDriver: true }), { iterations: BOUNCES }),
+        ),
       ),
-      Animated.delay(150),
+      Animated.delay(120),
     ]).start(() => {
       animDone.current = true;
       if (readyRef.current) finish();
@@ -63,8 +68,8 @@ export function LoadingSplash({ ready, onDone, onShown }: { ready: boolean; onDo
   useEffect(() => {
     const t = setTimeout(() => {
       if (readyRef.current) finish();
-    }, 3500);
-    const t2 = setTimeout(() => finish(), 8000);
+    }, 4500);
+    const t2 = setTimeout(() => finish(), 9000);
     return () => {
       clearTimeout(t);
       clearTimeout(t2);

@@ -1,3 +1,4 @@
+import { Unit, presetFor } from './catalog';
 import type { Group } from './theme';
 
 export type PrayerId = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
@@ -23,6 +24,18 @@ export const CALC_METHODS: { id: CalcMethod; label: string }[] = [
 
 export type ListItem = { id: string; name: string; detail?: string };
 
+export type Workout = ListItem & {
+  target: number;
+  unit: Unit;
+  /** Raise the target after each 7-day streak. */
+  levelUp: boolean;
+  step: number;
+  /** Day key of the last automatic raise, so it only happens once a day. */
+  lastLevelUp?: string;
+};
+
+export const LEVEL_UP_DAYS = 7;
+
 export type Settings = {
   version: 2;
   onboarded: boolean;
@@ -34,7 +47,7 @@ export type Settings = {
   passionPrompt: string;
   quitLabel: string;
   meds: ListItem[];
-  workouts: ListItem[];
+  workouts: Workout[];
   saltLimit: string;
   waterGoal: number;
   /** Size of one glass, in litres. */
@@ -42,6 +55,7 @@ export type Settings = {
   enabled: Record<FixedId, boolean>;
   prayerReminders: boolean;
   evening: { enabled: boolean; hour: number; minute: number };
+  sounds: boolean;
 };
 
 export type DayLog = {
@@ -75,20 +89,18 @@ export const defaultSettings: Settings = {
   location: null,
   calcMethod: 'NorthAmerica',
   madhab: 'shafi',
-  passionName: 'Music',
-  passionPrompt: 'Did you make a track today?',
-  quitLabel: 'No PMO',
+  passionName: '',
+  passionPrompt: '',
+  quitLabel: '',
   meds: [],
-  workouts: [
-    { id: 'pushups', name: 'Push-ups', detail: '20 reps' },
-    { id: 'plank', name: 'Plank', detail: '60 seconds' },
-  ],
+  workouts: [],
   saltLimit: '¼ tsp',
   waterGoal: 3,
   glass: 0.5,
   enabled: Object.fromEntries(FIXED.map((id) => [id, true])) as Record<FixedId, boolean>,
   prayerReminders: true,
   evening: { enabled: true, hour: 21, minute: 30 },
+  sounds: true,
 };
 
 export function emptyDay(): DayLog {
@@ -117,13 +129,48 @@ export function migrateSettings(saved: Record<string, any>): Settings {
   }
   if (!Array.isArray(saved.workouts)) {
     s.workouts = [
-      { id: 'pushups', name: 'Push-ups', detail: `${saved.pushups ?? 20} reps` },
-      { id: 'plank', name: 'Plank', detail: `${saved.plankSec ?? 60} seconds` },
+      makeWorkout('Push-ups', { target: Number(saved.pushups) || 20, id: 'pushups' }),
+      makeWorkout('Plank', { target: Number(saved.plankSec) || 60, id: 'plank' }),
     ];
+  } else {
+    s.workouts = saved.workouts.map((w: any) => (typeof w.target === 'number' ? w : fromOldWorkout(w)));
   }
+  // Settings from before passion/quit became choices kept their old defaults.
+  if (saved.passionName === undefined) s.passionName = 'Music';
+  if (saved.passionPrompt === undefined) s.passionPrompt = 'Did you make a track today?';
+  if (saved.quitLabel === undefined) s.quitLabel = 'No PMO';
   if (typeof saved.glass !== 'number') s.glass = typeof saved.waterStep === 'number' ? saved.waterStep : 0.5;
   for (const k of ['medsLabel', 'pushups', 'plankSec', 'waterStep']) delete (s as any)[k];
   return s;
+}
+
+export function makeWorkout(name: string, over: Partial<Workout> = {}): Workout {
+  const p = presetFor(name);
+  return { id: newId(), name, target: p.target, unit: p.unit, step: p.step, levelUp: true, ...over };
+}
+
+/** Old workouts stored "20 reps" / "60 seconds" as text. */
+function fromOldWorkout(w: { id: string; name: string; detail?: string }): Workout {
+  const m = String(w.detail ?? '').match(/([\d.]+)\s*(rep|sec|second|min|minute|step|km)?/i);
+  const p = presetFor(w.name);
+  const unitWord = (m?.[2] ?? '').toLowerCase();
+  const unit: Unit = unitWord.startsWith('rep') ? 'reps' : unitWord.startsWith('sec') ? 'sec' : unitWord.startsWith('min') ? 'min' : unitWord.startsWith('step') ? 'steps' : unitWord === 'km' ? 'km' : p.unit;
+  return { id: w.id, name: w.name, target: m ? Number(m[1]) : p.target, unit, step: p.step, levelUp: false };
+}
+
+const UNIT_WORD: Record<Unit, [string, string]> = {
+  reps: ['rep', 'reps'],
+  sec: ['second', 'seconds'],
+  min: ['minute', 'minutes'],
+  steps: ['step', 'steps'],
+  km: ['km', 'km'],
+};
+
+export function workoutTarget(w: Pick<Workout, 'target' | 'unit'>): string {
+  const n = w.target;
+  const [one, many] = UNIT_WORD[w.unit] ?? ['', ''];
+  const num = n >= 1000 ? n.toLocaleString('en-US') : fmtNum(n);
+  return `${num} ${n === 1 ? one : many}`;
 }
 
 export type HabitDef = {
@@ -152,18 +199,19 @@ export function allHabits(s: Settings): HabitDef[] {
   const out: HabitDef[] = [];
   // Body
   for (const m of s.meds) {
-    out.push({ id: `med:${m.id}`, group: 'body', kind: 'check', name: m.name, sub: m.detail || 'Daily dose', prompt: m.detail || 'Took it today?' });
+    out.push({ id: `med:${m.id}`, group: 'body', kind: 'check', name: m.name, sub: m.detail || 'Daily', prompt: m.detail || 'Took it today?' });
   }
   if (on('skin')) out.push({ id: 'skin', group: 'body', kind: 'check', name: 'Skincare', sub: 'Your routine', prompt: 'Did your routine?' });
   for (const w of s.workouts) {
-    out.push({ id: `wo:${w.id}`, group: 'body', kind: 'check', name: w.name, sub: w.detail || 'Done today', prompt: w.detail || 'Did it today?' });
+    const t = workoutTarget(w);
+    out.push({ id: `wo:${w.id}`, group: 'body', kind: 'check', name: w.name, sub: t, prompt: t });
   }
   if (on('sodium')) out.push({ id: 'sodium', group: 'body', kind: 'check', endOfDay: true, name: 'Low sodium', sub: `${s.saltLimit} salt per dish`, prompt: `${s.saltLimit} salt per dish, all day` });
   if (on('sugar')) out.push({ id: 'sugar', group: 'body', kind: 'check', endOfDay: true, name: 'No sugar', sub: 'Zero added sugar', prompt: 'Zero added sugar today' });
   if (on('water')) out.push({ id: 'water', group: 'body', kind: 'water', endOfDay: true, name: 'Water', sub: `${fmtNum(s.waterGoal)} L`, prompt: `Drank your ${fmtNum(s.waterGoal)} L today?` });
   // Mind
-  if (on('passion')) out.push({ id: 'passion', group: 'mind', kind: 'check', name: s.passionName || 'Passion', sub: s.passionPrompt, prompt: s.passionPrompt || 'Did you do it today?' });
-  if (on('clean')) out.push({ id: 'clean', group: 'mind', kind: 'check', endOfDay: true, name: s.quitLabel || 'Stayed clean', sub: 'Stayed clean', prompt: 'Stayed clean today' });
+  if (on('passion') && s.passionName) out.push({ id: 'passion', group: 'mind', kind: 'check', name: s.passionName, sub: s.passionPrompt, prompt: s.passionPrompt || 'Did you work on it today?' });
+  if (on('clean') && s.quitLabel) out.push({ id: 'clean', group: 'mind', kind: 'check', endOfDay: true, name: s.quitLabel || 'Stayed clean', sub: 'Stayed clean', prompt: 'Stayed clean today' });
   // Soul
   for (const p of PRAYERS) if (on(p)) out.push({ id: p, group: 'soul', kind: 'prayer', name: PRAYER_NAMES[p], sub: '', prompt: '' });
   return out;

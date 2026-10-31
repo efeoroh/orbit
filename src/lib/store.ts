@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
-import { DayLog, Settings, defaultSettings, emptyDay, migrateSettings } from './habits';
+import { addDays, dateKey, fromKey } from './dates';
+import { DayLog, LEVEL_UP_DAYS, Settings, defaultSettings, emptyDay, migrateSettings, workoutTarget } from './habits';
 
 const SETTINGS_KEY = 'orbit:settings:v1'; // shape is migrated on load
 const DAYS_KEY = 'orbit:days:v1';
@@ -101,4 +102,27 @@ export function exportJson(): string {
     null,
     2,
   );
+}
+
+/**
+ * After a workout is marked done: if "push for more" is on and this completes a
+ * 7-day streak, raise its target once. Returns the new target text, or null.
+ */
+export function levelUpIfEarned(habitId: string, key: string): { name: string; target: string } | null {
+  if (!habitId.startsWith('wo:')) return null;
+  const id = habitId.slice(3);
+  const w = state.settings.workouts.find((x) => x.id === id);
+  if (!w || !w.levelUp || w.lastLevelUp === key) return null;
+  let streak = 0;
+  const d = fromKey(key);
+  for (let i = 0; i < 400; i++) {
+    const k = dateKey(addDays(d, -i));
+    if (state.days[k]?.checks[habitId] === true) streak++;
+    else break;
+  }
+  if (streak === 0 || streak % LEVEL_UP_DAYS !== 0) return null;
+  const target = Math.round((w.target + w.step) * 100) / 100;
+  const next = { ...w, target, lastLevelUp: key };
+  updateSettings({ workouts: state.settings.workouts.map((x) => (x.id === id ? next : x)) });
+  return { name: w.name, target: workoutTarget(next) };
 }

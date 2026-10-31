@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { LoadingSplash } from '../components/LoadingSplash';
-import { initFeedback } from '../lib/feedback';
+import { initFeedback, setSoundsEnabled } from '../lib/feedback';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PRAYERS, PrayerId } from '../lib/habits';
 import { PRAYED_ACTION, rescheduleAll, setupCategories } from '../lib/notifications';
@@ -43,6 +43,9 @@ export default function RootLayout() {
     setupCategories();
     initFeedback();
   }, []);
+
+  const soundsOn = useOrbit().settings.sounds !== false;
+  useEffect(() => setSoundsEnabled(soundsOn), [soundsOn]);
 
   useEffect(() => {
     if (!ready) return;

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Animated, Easing, Pressable, View } from 'react-native';
 import Svg, { ClipPath, Defs, Path, Rect } from 'react-native-svg';
 import { formatTime } from '../lib/dates';
-import { tick } from '../lib/feedback';
+import { play, tick } from '../lib/feedback';
 import { DayLog, PRAYERS, PRAYER_NAMES, Settings, glasses } from '../lib/habits';
 import { prayerTimes } from '../lib/prayer';
 import { setCheck, setWater } from '../lib/store';
@@ -107,11 +107,15 @@ function WaterGlass({ dayKey, day, settings, onCelebrate }: Props) {
     const n = count + 1;
     setWater(dayKey, n * settings.glass);
     if (n >= total) onCelebrate('body');
-    else tick('light');
+    else {
+      tick('light');
+      play('drop');
+    }
   }
   function remove() {
     if (count <= 0) return;
     tick('medium');
+    play('tap');
     setWater(dayKey, (count - 1) * settings.glass);
   }
 

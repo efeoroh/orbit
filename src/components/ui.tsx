@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { tap } from '../lib/feedback';
 import { colors, fonts } from '../lib/theme';
 
 type Weight = keyof typeof fonts;
@@ -104,7 +105,10 @@ export function Segmented<K extends string>({
         return (
           <Pressable
             key={o.id}
-            onPress={() => onChange(o.id)}
+            onPress={() => {
+              tap();
+              onChange(o.id);
+            }}
             accessibilityRole="radio"
             accessibilityState={{ selected: on }}
             style={[styles.segItem, on && styles.segOn]}
@@ -134,7 +138,10 @@ export function Button({
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        tap();
+        onPress();
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}

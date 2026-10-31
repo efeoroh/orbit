@@ -6,35 +6,57 @@ import { LocationPicker } from '../components/LocationPicker';
 import { Rings } from '../components/Rings';
 import { TimeField } from '../components/TimeField';
 import { Button, Field, Grain, Segmented, T, Title } from '../components/ui';
-import { CALC_METHODS, MAX_WORKOUTS, Settings } from '../lib/habits';
-import { ListEditor, cleanList } from '../components/ListEditor';
+import { Chips, Dropdown, MultiPick } from '../components/pickers';
+import { WorkoutSetup } from '../components/WorkoutSetup';
+import { MEDS, PASSIONS, QUIT_HABITS, SALT_LIMITS, WATER_GOALS, WORKOUTS, questionsFor } from '../lib/catalog';
+import { tap } from '../lib/feedback';
+import { CALC_METHODS, MAX_WORKOUTS, Settings, fmtNum, makeWorkout, newId } from '../lib/habits';
 import { requestPermission } from '../lib/notifications';
 import { getState, updateSettings } from '../lib/store';
 import { colors } from '../lib/theme';
 
-const STEPS = ['welcome', 'name', 'location', 'prayer', 'mind', 'meds', 'workouts', 'body', 'reminders'] as const;
-
-function num(v: string, fallback: number) {
-  const n = parseFloat(v.replace(',', '.'));
-  return Number.isFinite(n) && n >= 0 ? n : fallback;
-}
 
 export default function Onboarding() {
   const [i, setI] = useState(0);
   const [d, setD] = useState<Settings>(() => ({ ...getState().settings }));
   const set = (p: Partial<Settings>) => setD((x) => ({ ...x, ...p }));
-  const step = STEPS[i];
+  const STEPS = [
+    'welcome',
+    'name',
+    'location',
+    'prayer',
+    'passion',
+    ...(d.passionName ? ['question'] : []),
+    'quit',
+    'meds',
+    'workouts',
+    ...d.workouts.map((w) => `wo:${w.id}`),
+    'water',
+    'salt',
+    'reminders',
+  ];
+  const step = STEPS[Math.min(i, STEPS.length - 1)];
+  const workout = step.startsWith('wo:') ? d.workouts.find((w) => `wo:${w.id}` === step) : undefined;
 
   const next = () => setI((x) => Math.min(x + 1, STEPS.length - 1));
-  const back = () => setI((x) => Math.max(x - 1, 0));
+  const back = () => {
+    tap();
+    setI((x) => Math.max(x - 1, 0));
+  };
 
   async function finish() {
     await requestPermission();
-    updateSettings({ ...d, meds: cleanList(d.meds), workouts: cleanList(d.workouts), onboarded: true });
+    updateSettings({
+      ...d,
+      meds: d.meds.filter((m) => m.name.trim()),
+      enabled: { ...d.enabled, passion: !!d.passionName, clean: !!d.quitLabel },
+      onboarded: true,
+    });
     router.replace('/');
   }
 
   const canNext = step !== 'name' || d.name.trim().length > 0;
+  const skippable = (step === 'passion' && !d.passionName) || (step === 'quit' && !d.quitLabel) || (step === 'location' && !d.location);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -50,15 +72,13 @@ export default function Onboarding() {
             ) : (
               <View style={{ width: 44 }} />
             )}
-            <View style={{ flexDirection: 'row', gap: 6 }} accessibilityLabel={`Step ${i + 1} of ${STEPS.length}`}>
-              {STEPS.map((s, k) => (
-                <View key={s} style={{ width: k === i ? 18 : 7, height: 7, borderRadius: 4, backgroundColor: k <= i ? colors.ink : colors.dotOff }} />
-              ))}
+            <View style={{ flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.dotOff, marginHorizontal: 16, overflow: 'hidden' }} accessibilityLabel={`Step ${i + 1} of ${STEPS.length}`}>
+              <View style={{ width: `${((i + 1) / STEPS.length) * 100}%`, height: 5, borderRadius: 3, backgroundColor: colors.ink }} />
             </View>
             <View style={{ width: 44 }} />
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20, gap: 22, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+          <ScrollView key={step} contentContainerStyle={{ padding: 20, gap: 22, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             {step === 'welcome' && (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>
                 <Rings
@@ -107,7 +127,10 @@ export default function Onboarding() {
                     return (
                       <Pressable
                         key={m.id}
-                        onPress={() => set({ calcMethod: m.id })}
+                        onPress={() => {
+                          tap();
+                          set({ calcMethod: m.id });
+                        }}
                         accessibilityRole="radio"
                         accessibilityState={{ selected: on }}
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 46, borderBottomWidth: 1, borderBottomColor: colors.line }}
@@ -137,15 +160,52 @@ export default function Onboarding() {
               </>
             )}
 
-            {step === 'mind' && (
+            {step === 'passion' && (
               <>
-                <Title>Mind</Title>
+                <Title>What's your passion?</Title>
                 <T size={15} color={colors.ink2}>
-                  Your Mind ring is your passion plus one habit you're beating.
+                  The thing you want to show up for every day. It's half of your Mind ring.
                 </T>
-                <Field label="Your passion" value={d.passionName} onChangeText={(passionName) => set({ passionName })} placeholder="Music" />
-                <Field label="Daily question" value={d.passionPrompt} onChangeText={(passionPrompt) => set({ passionPrompt })} placeholder="Did you make a track today?" />
-                <Field label="Habit you're beating" value={d.quitLabel} onChangeText={(quitLabel) => set({ quitLabel })} placeholder="No PMO" />
+                <Dropdown
+                  value={d.passionName}
+                  options={PASSIONS}
+                  placeholder="Choose your passion"
+                  otherPlaceholder="e.g. Dancing"
+                  onChange={(passionName) => set({ passionName, passionPrompt: questionsFor(passionName)[0] })}
+                />
+              </>
+            )}
+
+            {step === 'question' && (
+              <>
+                <Title>Your daily question</Title>
+                <T size={15} color={colors.ink2}>
+                  What should count as showing up for {d.passionName.toLowerCase()}?
+                </T>
+                <Dropdown
+                  value={d.passionPrompt}
+                  options={questionsFor(d.passionName)}
+                  placeholder="Choose a question"
+                  otherPlaceholder="Write your own question"
+                  onChange={(passionPrompt) => set({ passionPrompt })}
+                />
+              </>
+            )}
+
+            {step === 'quit' && (
+              <>
+                <Title>A habit you're beating</Title>
+                <T size={15} color={colors.ink2}>
+                  The other half of your Mind ring. You confirm it at the end of each day.
+                </T>
+                <Dropdown
+                  value={d.quitLabel}
+                  options={QUIT_HABITS}
+                  placeholder="Choose one"
+                  otherPlaceholder="e.g. No energy drinks"
+                  noneLabel="Nothing right now"
+                  onChange={(quitLabel) => set({ quitLabel })}
+                />
               </>
             )}
 
@@ -153,14 +213,17 @@ export default function Onboarding() {
               <>
                 <Title>Medication & vitamins</Title>
                 <T size={15} color={colors.ink2}>
-                  Add each one you take daily. Each gets its own check-in. Skip if none.
+                  Tick everything you take daily. Each one gets its own check-in. None? Just continue.
                 </T>
-                <ListEditor
-                  items={d.meds}
-                  onChange={(meds) => set({ meds })}
-                  namePlaceholder="e.g. Finasteride"
-                  detailPlaceholder="Dose or note (optional)"
-                  addLabel={d.meds.length ? 'Add another' : 'Add one'}
+                <MultiPick
+                  options={MEDS}
+                  selected={d.meds.map((m) => m.name)}
+                  otherPlaceholder="e.g. a prescription"
+                  onToggle={(name, on) =>
+                    set({ meds: on ? [...d.meds, { id: newId(), name }] : d.meds.filter((m) => m.name.toLowerCase() !== name.toLowerCase()) })
+                  }
+                  onAdd={(name) => set({ meds: [...d.meds, { id: newId(), name }] })}
+                  onRemove={(name) => set({ meds: d.meds.filter((m) => m.name !== name) })}
                 />
               </>
             )}
@@ -169,33 +232,62 @@ export default function Onboarding() {
               <>
                 <Title>Daily workouts</Title>
                 <T size={15} color={colors.ink2}>
-                  Pick up to {MAX_WORKOUTS}. Each one is its own check-in.
+                  Choose up to {MAX_WORKOUTS}. Next, you'll set a target for each.
                 </T>
-                <ListEditor
-                  items={d.workouts}
-                  onChange={(workouts) => set({ workouts })}
-                  namePlaceholder="e.g. Push-ups"
-                  detailPlaceholder="Target, e.g. 20 reps"
-                  addLabel="Add a workout"
+                <MultiPick
+                  options={WORKOUTS.map((w) => w.name)}
+                  selected={d.workouts.map((w) => w.name)}
                   max={MAX_WORKOUTS}
+                  otherPlaceholder="e.g. Burpees"
+                  onToggle={(name, on) =>
+                    set({ workouts: on ? [...d.workouts, makeWorkout(name)] : d.workouts.filter((w) => w.name.toLowerCase() !== name.toLowerCase()) })
+                  }
+                  onAdd={(name) => set({ workouts: [...d.workouts, makeWorkout(name)] })}
+                  onRemove={(name) => set({ workouts: d.workouts.filter((w) => w.name !== name) })}
                 />
               </>
             )}
 
-            {step === 'body' && (
+            {workout && (
               <>
-                <Title>Water & salt</Title>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field label="Water goal (L)" keyboardType="decimal-pad" defaultValue={String(d.waterGoal)} onChangeText={(v) => set({ waterGoal: num(v, d.waterGoal) || 3 })} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field label="Salt per dish" value={d.saltLimit} onChangeText={(saltLimit) => set({ saltLimit })} />
-                  </View>
-                </View>
-                <T size={13} color={colors.muted}>
-                  A common guideline is about 3 L of water a day from drinks for adult men, and about 2.2 L for women. Water is logged in glasses of {d.glass} L.
+                <Title>{workout.name}</Title>
+                <WorkoutSetup w={workout} onChange={(w) => set({ workouts: d.workouts.map((x) => (x.id === w.id ? w : x)) })} />
+              </>
+            )}
+
+            {step === 'water' && (
+              <>
+                <Title>Water</Title>
+                <T size={15} color={colors.ink2}>
+                  How much do you want to drink a day? You'll log it a glass at a time.
                 </T>
+                <Chips
+                  options={WATER_GOALS}
+                  value={d.enabled.water ? d.waterGoal : null}
+                  format={(n) => `${fmtNum(n)} L`}
+                  other={{ placeholder: 'Litres, e.g. 2.8', keyboard: 'decimal-pad', parse: (t) => { const n = parseFloat(t.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; } }}
+                  off="Don't track"
+                  onChange={(v) => set(v === null ? { enabled: { ...d.enabled, water: false } } : { waterGoal: v, enabled: { ...d.enabled, water: true } })}
+                />
+                <T size={13} color={colors.muted}>
+                  A common guideline is about 3 L a day from drinks for adult men and about 2.2 L for women.
+                </T>
+              </>
+            )}
+
+            {step === 'salt' && (
+              <>
+                <Title>Salt</Title>
+                <T size={15} color={colors.ink2}>
+                  Your limit per dish. You'll confirm it at the end of the day.
+                </T>
+                <Chips
+                  options={SALT_LIMITS}
+                  value={d.enabled.sodium ? d.saltLimit : null}
+                  other={{ placeholder: 'e.g. 1 pinch', parse: (t) => (t.trim() ? t.trim() : null) }}
+                  off="Don't track"
+                  onChange={(v) => set(v === null ? { enabled: { ...d.enabled, sodium: false } } : { saltLimit: v, enabled: { ...d.enabled, sodium: true } })}
+                />
               </>
             )}
 
@@ -212,7 +304,10 @@ export default function Onboarding() {
                   <Switch
                     value={d.prayerReminders && !!d.location}
                     disabled={!d.location}
-                    onValueChange={(prayerReminders) => set({ prayerReminders })}
+                    onValueChange={(prayerReminders) => {
+                      tap();
+                      set({ prayerReminders });
+                    }}
                     trackColor={{ true: colors.dark, false: colors.border }}
                     accessibilityLabel="Prayer reminders"
                   />
@@ -221,7 +316,10 @@ export default function Onboarding() {
                   <T size={15}>Evening check-in reminder</T>
                   <Switch
                     value={d.evening.enabled}
-                    onValueChange={(enabled) => set({ evening: { ...d.evening, enabled } })}
+                    onValueChange={(enabled) => {
+                      tap();
+                      set({ evening: { ...d.evening, enabled } });
+                    }}
                     trackColor={{ true: colors.dark, false: colors.border }}
                     accessibilityLabel="Evening check-in reminder"
                   />
@@ -241,7 +339,7 @@ export default function Onboarding() {
               <Button label={d.name ? `Let's go, ${d.name.trim().split(' ')[0]}` : "Let's go"} onPress={finish} />
             ) : (
               <Button
-                label={step === 'welcome' ? 'Get started' : step === 'location' && !d.location ? 'Skip for now' : 'Continue'}
+                label={step === 'welcome' ? 'Get started' : skippable ? 'Skip for now' : 'Continue'}
                 onPress={next}
                 disabled={!canNext}
               />
